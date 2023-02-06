@@ -15,7 +15,6 @@ def transform(df: pd.DataFrame) -> pd.DataFrame:
     """Fix datatype issues"""
     df["lpep_pickup_datetime"] = pd.to_datetime(df["lpep_pickup_datetime"])
     df["lpep_dropoff_datetime"] = pd.to_datetime(df["lpep_dropoff_datetime"])
-    print(df.head(2))
     print(f"columns: {df.dtypes}")
     print(f"rows: {len(df)}")
     return df

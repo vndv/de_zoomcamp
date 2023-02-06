@@ -2,9 +2,11 @@ import boto3
 import pandas as pd
 from pathlib import Path
 from prefect import flow, task
+from prefect.tasks import task_input_hash
+from datetime import timedelta
 
 
-@task(retries=3)
+@task(retries=3,cache_key_fn=task_input_hash, cache_expiration=timedelta(days=1) )
 def extract(dataset_url: str, color: str, dataset_file: str) -> pd.DataFrame:
     """Extract csv file and load to Yandex Cloud Storage"""
     df = pd.read_csv(dataset_url)
@@ -31,23 +33,27 @@ def write_yc(bucket_name: str, path: Path, dataset_file: str) -> None:
 
 
 @flow()
-def etl_yc_to_clh():
+def etl_yc_to_clh(year: int, month: str, color: str) -> None:
     """Main ETL function"""
     bucket_name = "de-zoomcamp"
-    color = "yellow"
-    year = 2019
-    month = ["02", "03"]
+    dataset_file = f"{color}_tripdata_{year}-{month}"
+    dataset_url = f"https://github.com/DataTalksClub/nyc-tlc-data/releases/download/{color}/{dataset_file}.csv.gz"
 
-    for m in month:
-        dataset_file = f"{color}_tripdata_{year}-{m}"
-        dataset_url = f"https://github.com/DataTalksClub/nyc-tlc-data/releases/download/{color}/{dataset_file}.csv.gz"
+    df = extract(dataset_url, color, dataset_file)
+    path = write_local(df, color, dataset_file)
+    write_yc(bucket_name, path, dataset_file)
+    # load_to_cl(bucket_name, path, dataset_file)
 
-        df = extract(dataset_url, color, dataset_file)
-        path = write_local(df, color, dataset_file)
-        write_yc(bucket_name, path, dataset_file)
-        load_to_cl(bucket_name, path, dataset_file)
+@flow()
+def etl_parent_flow(months: list[str] = ["02","03"], year: int = 2020, color: str = "yellow"):
+    for month in months:
+        etl_yc_to_clh(year,month, color)
+
     
 
 
 if __name__ == "__main__":
-    etl_yc_to_clh()
+    color = "yellow"
+    months = ["02", "03"]
+    year = 2020
+    etl_parent_flow(months, year, color)
